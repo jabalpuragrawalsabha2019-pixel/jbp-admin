@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Plus, Edit, Trash2, Award } from 'lucide-react'
@@ -286,16 +286,19 @@ export default function PostHoldersPage() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>{editingHolder ? 'Edit Post Holder' : 'Add Post Holder'}</DialogTitle>
+            <DialogDescription>
+              {editingHolder ? 'Update the post holder information below.' : 'Fill in the details to add a new post holder.'}
+            </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <Label htmlFor="user_id">Select User (Optional)</Label>
-              <Select value={formData.user_id} onValueChange={(value) => setFormData({ ...formData, user_id: value })}>
+              <Select value={formData.user_id || 'none'} onValueChange={(value) => setFormData({ ...formData, user_id: value === 'none' ? '' : value })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select a verified user" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No User (Manual Entry)</SelectItem>
+                  <SelectItem value="none">No User (Manual Entry)</SelectItem>
                   {users.map(user => (
                     <SelectItem key={user.id} value={user.id}>
                       {user.full_name || user.phone}
