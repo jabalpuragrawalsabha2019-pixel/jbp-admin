@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { 
   LayoutDashboard, Users, Heart, Calendar, Briefcase, 
   Droplet, DollarSign, Award, Upload, Settings, 
-  LogOut, Menu, X, MessageSquare
+  LogOut, Menu, X, MessageSquare, UserX
 } from 'lucide-react'
 import { useState } from 'react'
 import { createBrowserClient } from '@/lib/supabase'
@@ -22,6 +22,7 @@ const navigation = [
   { name: 'Donations', href: '/dashboard/donations', icon: DollarSign },
   { name: 'Post Holders', href: '/dashboard/post-holders', icon: Award },
   { name: 'Contact Requests', href: '/dashboard/contact-requests', icon: MessageSquare },
+  { name: 'Deletion Requests', href: '/dashboard/deletion-requests', icon: UserX },
   { name: 'Import Members', href: '/dashboard/import', icon: Upload },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
 ]
