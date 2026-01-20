@@ -1,9 +1,19 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
-    domains: ['mtudvgoueeldtnrccvyw.supabase.co', 'res.cloudinary.com'],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'res.cloudinary.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'mtudvgoueeldtnrccvyw.supabase.co',
+        pathname: '/**',
+      },
+    ],
   },
-  // Allow cross-origin requests for development
   async headers() {
     return [
       {
