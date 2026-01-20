@@ -6,8 +6,12 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Search, Download, Eye, TrendingUp, DollarSign, Users, Calendar } from 'lucide-react'
+import { Search, Download, Eye, TrendingUp, DollarSign, Users, Calendar, Trash2, CheckCircle, XCircle } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
 import toast from 'react-hot-toast'
 
 interface Donation {
@@ -18,6 +22,10 @@ interface Donation {
   upi_ref: string | null
   receipt_url: string | null
   donated_at: string
+  is_verified: boolean | null
+  verified_by: string | null
+  verified_at: string | null
+  admin_notes: string | null
 }
 
 export default function DonationsPage() {
@@ -28,6 +36,8 @@ export default function DonationsPage() {
   const [loading, setLoading] = useState(true)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [verificationFilter, setVerificationFilter] = useState<string>('all')
+  const [adminNotes, setAdminNotes] = useState('')
   const [stats, setStats] = useState({
     total: 0,
     count: 0,
@@ -43,7 +53,7 @@ export default function DonationsPage() {
   useEffect(() => {
     filterDonations()
     calculateStats()
-  }, [donations, searchQuery, dateFrom, dateTo])
+  }, [donations, searchQuery, dateFrom, dateTo, verificationFilter])
 
   const fetchDonations = async () => {
     try {
@@ -83,6 +93,12 @@ export default function DonationsPage() {
       filtered = filtered.filter(donation => 
         new Date(donation.donated_at) <= new Date(dateTo)
       )
+    }
+
+    if (verificationFilter === 'verified') {
+      filtered = filtered.filter(donation => donation.is_verified === true)
+    } else if (verificationFilter === 'unverified') {
+      filtered = filtered.filter(donation => donation.is_verified !== true)
     }
 
     setFilteredDonations(filtered)
@@ -143,6 +159,55 @@ export default function DonationsPage() {
     a.click()
     window.URL.revokeObjectURL(url)
     toast.success('CSV exported successfully')
+  }
+
+  const deleteDonation = async (donationId: string) => {
+    if (!confirm('Are you sure you want to delete this donation? This action cannot be undone.')) {
+      return
+    }
+
+    try {
+      const { error } = await supabase
+        .from('donations')
+        .delete()
+        .eq('id', donationId)
+
+      if (error) throw error
+
+      toast.success('Donation deleted successfully')
+      setSelectedDonation(null)
+      fetchDonations()
+    } catch (error) {
+      console.error('Error deleting donation:', error)
+      toast.error('Failed to delete donation')
+    }
+  }
+
+  const toggleVerification = async (donationId: string, currentStatus: boolean | null) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      const newStatus = !currentStatus
+      const { error } = await supabase
+        .from('donations')
+        .update({
+          is_verified: newStatus,
+          verified_by: newStatus ? user?.id : null,
+          verified_at: newStatus ? new Date().toISOString() : null,
+          admin_notes: newStatus ? adminNotes : null,
+        })
+        .eq('id', donationId)
+
+      if (error) throw error
+
+      toast.success(`Donation marked as ${newStatus ? 'verified' : 'unverified'}`)
+      setSelectedDonation(null)
+      setAdminNotes('')
+      fetchDonations()
+    } catch (error) {
+      console.error('Error updating verification:', error)
+      toast.error('Failed to update verification')
+    }
   }
 
   if (loading) {
@@ -239,7 +304,7 @@ export default function DonationsPage() {
       {/* Filters */}
       <Card>
         <CardContent className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
               <Input
@@ -261,6 +326,16 @@ export default function DonationsPage() {
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
             />
+            <Select value={verificationFilter} onValueChange={setVerificationFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Verification" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Donations</SelectItem>
+                <SelectItem value="verified">Verified Only</SelectItem>
+                <SelectItem value="unverified">Unverified Only</SelectItem>
+              </SelectContent>
+            </Select>
             <div className="text-sm text-gray-600 flex items-center">
               Showing {filteredDonations.length} of {donations.length} donations
             </div>
@@ -278,7 +353,7 @@ export default function DonationsPage() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Donor Name</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amount</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Transaction ID</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">UPI Ref</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                 </tr>
@@ -295,20 +370,39 @@ export default function DonationsPage() {
                     <td className="px-6 py-4 text-sm text-gray-900">
                       {donation.transaction_id || 'N/A'}
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-900">
-                      {donation.upi_ref || 'N/A'}
+                    <td className="px-6 py-4">
+                      {donation.is_verified ? (
+                        <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+                          <CheckCircle className="w-3 h-3 mr-1" />
+                          Verified
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary">
+                          <XCircle className="w-3 h-3 mr-1" />
+                          Unverified
+                        </Badge>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-900">
                       {new Date(donation.donated_at).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setSelectedDonation(donation)}
-                      >
-                        <Eye className="w-4 h-4" />
-                      </Button>
+                      <div className="flex space-x-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setSelectedDonation(donation)}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => deleteDonation(donation.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -349,7 +443,43 @@ export default function DonationsPage() {
                   <label className="text-sm font-medium text-gray-500">UPI Reference</label>
                   <p className="text-gray-900">{selectedDonation.upi_ref || 'Not provided'}</p>
                 </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Verification Status</label>
+                  <div className="mt-1">
+                    {selectedDonation.is_verified ? (
+                      <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+                        <CheckCircle className="w-3 h-3 mr-1" />
+                        Verified
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary">
+                        <XCircle className="w-3 h-3 mr-1" />
+                        Unverified
+                      </Badge>
+                    )}
+                  </div>
+                </div>
               </div>
+
+              {selectedDonation.admin_notes && (
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Admin Notes</label>
+                  <p className="text-gray-900 mt-1 bg-gray-50 p-3 rounded">{selectedDonation.admin_notes}</p>
+                </div>
+              )}
+
+              {/* Admin Notes Input */}
+              <div>
+                <Label htmlFor="adminNotes">Add Admin Notes (Optional)</Label>
+                <Textarea
+                  id="adminNotes"
+                  value={adminNotes}
+                  onChange={(e) => setAdminNotes(e.target.value)}
+                  placeholder="Add notes about this donation verification..."
+                  rows={2}
+                />
+              </div>
+
               {selectedDonation.receipt_url && (
                 <div>
                   <label className="text-sm font-medium text-gray-500 block mb-2">Receipt</label>
@@ -363,6 +493,39 @@ export default function DonationsPage() {
                   </a>
                 </div>
               )}
+              
+              {/* Action Buttons */}
+              <div className="pt-4 border-t space-y-2">
+                <Button
+                  variant={selectedDonation.is_verified ? "outline" : "default"}
+                  onClick={() => toggleVerification(selectedDonation.id, selectedDonation.is_verified)}
+                  className="w-full"
+                >
+                  {selectedDonation.is_verified ? (
+                    <>
+                      <XCircle className="w-4 h-4 mr-2" />
+                      Mark as Unverified
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-4 h-4 mr-2" />
+                      Mark as Verified
+                    </>
+                  )}
+                </Button>
+                
+                <Button
+                  variant="destructive"
+                  onClick={() => deleteDonation(selectedDonation.id)}
+                  className="w-full"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete This Donation
+                </Button>
+                <p className="text-xs text-center text-gray-500">
+                  Delete fake or test donations. Verify real donations.
+                </p>
+              </div>
             </div>
           )}
         </DialogContent>
