@@ -73,7 +73,7 @@ export default function EventsPage() {
   const [events, setEvents] = useState<Event[]>([]);
   const [filteredEvents, setFilteredEvents] = useState<Event[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("pending");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [approvalNotes, setApprovalNotes] = useState("");
