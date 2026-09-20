@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createBrowserClient } from '@/lib/supabase'
+import { adminApi } from '@/lib/adminApi'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -85,14 +86,16 @@ export default function UsersPage() {
     setFilteredUsers(filtered)
   }
 
+  /**
+   * Toggles is_verified via the secured admin API (service role).
+   */
   const toggleVerification = async (userId: string, currentStatus: boolean) => {
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({ is_verified: !currentStatus })
-        .eq('id', userId)
-
-      if (error) throw error
+      const { error } = await adminApi('/api/admin/users', 'PATCH', {
+        userId,
+        is_verified: !currentStatus,
+      })
+      if (error) throw new Error(error)
 
       toast.success(`User ${!currentStatus ? 'verified' : 'unverified'} successfully`)
       fetchUsers()
@@ -101,14 +104,16 @@ export default function UsersPage() {
     }
   }
 
+  /**
+   * Toggles is_admin via the secured admin API (service role).
+   */
   const toggleAdmin = async (userId: string, currentStatus: boolean) => {
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({ is_admin: !currentStatus })
-        .eq('id', userId)
-
-      if (error) throw error
+      const { error } = await adminApi('/api/admin/users', 'PATCH', {
+        userId,
+        is_admin: !currentStatus,
+      })
+      if (error) throw new Error(error)
 
       toast.success(`Admin status ${!currentStatus ? 'granted' : 'revoked'} successfully`)
       fetchUsers()
@@ -117,18 +122,17 @@ export default function UsersPage() {
     }
   }
 
+  /**
+   * Deletes a user via the secured admin API (service role).
+   */
   const deleteUser = async (userId: string) => {
     if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
       return
     }
 
     try {
-      const { error } = await supabase
-        .from('users')
-        .delete()
-        .eq('id', userId)
-
-      if (error) throw error
+      const { error } = await adminApi('/api/admin/users', 'DELETE', { userId })
+      if (error) throw new Error(error)
 
       toast.success('User deleted successfully')
       fetchUsers()
