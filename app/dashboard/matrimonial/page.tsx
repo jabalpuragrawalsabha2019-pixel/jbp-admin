@@ -15,12 +15,51 @@ import toast from 'react-hot-toast'
 interface MatrimonialProfile {
   id: string
   user_id: string
+  candidate_name: string | null
   gender: string
   age: number | null
+  date_of_birth: string | null
+  birth_time: string | null
+  birth_place: string | null
+  district: string | null
+  height: string | null
+  complexion: string | null
+  blood_group: string | null
+  rashi: string | null
   education: string | null
   occupation: string | null
+  business_service_name: string | null
+  annual_income: string | null
   city: string | null
   gotra: string | null
+  brothers_married: number | null
+  brothers_unmarried: number | null
+  sisters_married: number | null
+  sisters_unmarried: number | null
+  father_guardian_name: string | null
+  father_mobile: string | null
+  father_business_details: string | null
+  father_annual_income: string | null
+  business_office_address: string | null
+  mother_name: string | null
+  mother_homemaker_or_service: string | null
+  residential_address: string | null
+  email: string | null
+  whatsapp_number: string | null
+  special_statuses: string[] | null
+  previous_spouse_name: string | null
+  previous_spouse_mobile: string | null
+  previous_father_in_law_name_address: string | null
+  previous_father_in_law_mobile: string | null
+  sons_count: number | null
+  sons_ages: string | null
+  daughters_count: number | null
+  daughters_ages: string | null
+  disability_details: string | null
+  declaration_accepted: boolean | null
+  declaration_date: string | null
+  parent_signature_url: string | null
+  candidate_signature_url: string | null
   family_details: string | null
   photos: string[]
   horoscope_url: string | null
@@ -81,9 +120,13 @@ export default function MatrimonialPage() {
     let filtered = [...profiles]
 
     if (searchQuery) {
-      filtered = filtered.filter(profile => 
-        profile.users?.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        profile.city?.toLowerCase().includes(searchQuery.toLowerCase())
+      const q = searchQuery.toLowerCase()
+      filtered = filtered.filter(profile =>
+        profile.candidate_name?.toLowerCase().includes(q) ||
+        profile.users?.full_name?.toLowerCase().includes(q) ||
+        profile.city?.toLowerCase().includes(q) ||
+        profile.district?.toLowerCase().includes(q) ||
+        profile.gotra?.toLowerCase().includes(q)
       )
     }
 
@@ -106,8 +149,8 @@ export default function MatrimonialPage() {
           .from('matrimonial_profiles')
           .update({ 
             status: 'approved',
-            approved_by: user?.id
-            // approval_notes temporarily removed until column is added to database
+            approved_by: user?.id,
+            approval_notes: approvalNotes || null,
           })
           .eq('id', profileId)
         
@@ -259,8 +302,12 @@ export default function MatrimonialPage() {
                 {filteredProfiles.map((profile) => (
                   <tr key={profile.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4">
-                      <div className="font-medium text-gray-900">{profile.users?.full_name || 'No name'}</div>
-                      <div className="text-sm text-gray-500">{profile.users?.phone}</div>
+                      <div className="font-medium text-gray-900">
+                        {profile.candidate_name || profile.users?.full_name || 'No name'}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        Account: {profile.users?.full_name || '—'} · {profile.users?.phone}
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm">
@@ -269,7 +316,7 @@ export default function MatrimonialPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="text-sm">{profile.city}</div>
+                      <div className="text-sm">{profile.district || profile.city}</div>
                       <div className="text-sm text-gray-500">{profile.gotra}</div>
                     </td>
                     <td className="px-6 py-4">
@@ -307,39 +354,79 @@ export default function MatrimonialPage() {
           </DialogHeader>
           {selectedProfile && (
             <div className="space-y-6">
-              {/* User Info */}
               <div className="bg-blue-50 p-4 rounded-lg">
-                <h3 className="font-semibold text-lg">{selectedProfile.users?.full_name}</h3>
-                <p className="text-sm text-gray-600">Phone: {selectedProfile.users?.phone}</p>
+                <h3 className="font-semibold text-lg">
+                  {selectedProfile.candidate_name || selectedProfile.users?.full_name}
+                </h3>
+                <p className="text-sm text-gray-600">
+                  Submitted by account: {selectedProfile.users?.full_name} · {selectedProfile.users?.phone}
+                </p>
               </div>
 
-              {/* Profile Details */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Gender</label>
-                  <p className="text-gray-900">{selectedProfile.gender}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Age</label>
-                  <p className="text-gray-900">{selectedProfile.age} years</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Education</label>
-                  <p className="text-gray-900">{selectedProfile.education || 'Not provided'}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Occupation</label>
-                  <p className="text-gray-900">{selectedProfile.occupation || 'Not provided'}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">City</label>
-                  <p className="text-gray-900">{selectedProfile.city || 'Not provided'}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Gotra</label>
-                  <p className="text-gray-900">{selectedProfile.gotra || 'Not provided'}</p>
-                </div>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                {[
+                  ['Gender', selectedProfile.gender],
+                  ['Age', selectedProfile.age ? `${selectedProfile.age} years` : null],
+                  ['DOB', selectedProfile.date_of_birth],
+                  ['Birth time', selectedProfile.birth_time],
+                  ['Birth place', selectedProfile.birth_place],
+                  ['District', selectedProfile.district || selectedProfile.city],
+                  ['Height', selectedProfile.height],
+                  ['Complexion', selectedProfile.complexion],
+                  ['Blood group', selectedProfile.blood_group],
+                  ['Rashi', selectedProfile.rashi],
+                  ['Gotra', selectedProfile.gotra],
+                  ['Education', selectedProfile.education],
+                  ['Business/service', selectedProfile.business_service_name || selectedProfile.occupation],
+                  ['Annual income', selectedProfile.annual_income],
+                  ['Brothers M/U', `${selectedProfile.brothers_married ?? 0}/${selectedProfile.brothers_unmarried ?? 0}`],
+                  ['Sisters M/U', `${selectedProfile.sisters_married ?? 0}/${selectedProfile.sisters_unmarried ?? 0}`],
+                  ['Father/guardian', selectedProfile.father_guardian_name],
+                  ['Father mobile', selectedProfile.father_mobile],
+                  ["Father's work", selectedProfile.father_business_details],
+                  ["Father's income", selectedProfile.father_annual_income],
+                  ['Office address', selectedProfile.business_office_address],
+                  ['Mother', selectedProfile.mother_name],
+                  ['Mother status', selectedProfile.mother_homemaker_or_service],
+                  ['Residential address', selectedProfile.residential_address],
+                  ['Email', selectedProfile.email],
+                  ['WhatsApp', selectedProfile.whatsapp_number],
+                  ['Special statuses', (selectedProfile.special_statuses || []).join(', ')],
+                  ['Previous spouse', selectedProfile.previous_spouse_name],
+                  ['Previous spouse mobile', selectedProfile.previous_spouse_mobile],
+                  ['Previous FIL', selectedProfile.previous_father_in_law_name_address],
+                  ['FIL mobile', selectedProfile.previous_father_in_law_mobile],
+                  ['Sons', selectedProfile.sons_count != null ? `${selectedProfile.sons_count} (${selectedProfile.sons_ages || ''})` : null],
+                  ['Daughters', selectedProfile.daughters_count != null ? `${selectedProfile.daughters_count} (${selectedProfile.daughters_ages || ''})` : null],
+                  ['Disability', selectedProfile.disability_details],
+                  ['Declaration date', selectedProfile.declaration_date],
+                  ['Declaration accepted', selectedProfile.declaration_accepted ? 'Yes' : 'No'],
+                ].map(([label, value]) => (
+                  value ? (
+                    <div key={String(label)}>
+                      <label className="text-sm font-medium text-gray-500">{label}</label>
+                      <p className="text-gray-900 whitespace-pre-wrap">{value}</p>
+                    </div>
+                  ) : null
+                ))}
               </div>
+
+              {(selectedProfile.parent_signature_url || selectedProfile.candidate_signature_url) && (
+                <div className="grid grid-cols-2 gap-4">
+                  {selectedProfile.parent_signature_url && (
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Parent signature</label>
+                      <img src={selectedProfile.parent_signature_url} alt="Parent signature" className="mt-2 max-h-28 border rounded" />
+                    </div>
+                  )}
+                  {selectedProfile.candidate_signature_url && (
+                    <div>
+                      <label className="text-sm font-medium text-gray-500">Candidate signature</label>
+                      <img src={selectedProfile.candidate_signature_url} alt="Candidate signature" className="mt-2 max-h-28 border rounded" />
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Family Details */}
               {selectedProfile.family_details && (

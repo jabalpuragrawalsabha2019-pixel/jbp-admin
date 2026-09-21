@@ -43,12 +43,51 @@ export type Database = {
         Row: {
           id: string
           user_id: string
+          candidate_name: string | null
           gender: string
           age: number | null
+          date_of_birth: string | null
+          birth_time: string | null
+          birth_place: string | null
+          district: string | null
+          height: string | null
+          complexion: string | null
+          blood_group: string | null
+          rashi: string | null
           education: string | null
           occupation: string | null
+          business_service_name: string | null
+          annual_income: string | null
           city: string | null
           gotra: string | null
+          brothers_married: number | null
+          brothers_unmarried: number | null
+          sisters_married: number | null
+          sisters_unmarried: number | null
+          father_guardian_name: string | null
+          father_mobile: string | null
+          father_business_details: string | null
+          father_annual_income: string | null
+          business_office_address: string | null
+          mother_name: string | null
+          mother_homemaker_or_service: string | null
+          residential_address: string | null
+          email: string | null
+          whatsapp_number: string | null
+          special_statuses: string[] | null
+          previous_spouse_name: string | null
+          previous_spouse_mobile: string | null
+          previous_father_in_law_name_address: string | null
+          previous_father_in_law_mobile: string | null
+          sons_count: number | null
+          sons_ages: string | null
+          daughters_count: number | null
+          daughters_ages: string | null
+          disability_details: string | null
+          declaration_accepted: boolean | null
+          declaration_date: string | null
+          parent_signature_url: string | null
+          candidate_signature_url: string | null
           family_details: string | null
           photos: any
           horoscope_url: string | null
