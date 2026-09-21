@@ -13,6 +13,10 @@ import { Label } from '@/components/ui/label'
 import { Search, CheckCircle, XCircle, Eye, Star, EyeOff, Plus, Edit, Trash2 } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
 import toast from 'react-hot-toast'
+import {
+  replaceAdminImage,
+  deleteCloudinaryUrl,
+} from '@/lib/cloudinaryClient'
 
 interface Event {
   id: string
@@ -179,6 +183,15 @@ export default function EventsPage() {
     }
 
     try {
+      const event =
+        events.find((e) => e.id === eventId) ||
+        selectedEvent ||
+        editEvent
+
+      if (event?.poster_url) {
+        await deleteCloudinaryUrl(event.poster_url)
+      }
+
       const { error } = await supabase
         .from('events')
         .delete()
@@ -275,44 +288,22 @@ export default function EventsPage() {
 
     setUploading(true)
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('upload_preset', 'jbp_events')
+      const previousUrl = isEdit ? editEvent?.poster_url : newEvent.poster_url
+      const uploaded = await replaceAdminImage(file, 'events', previousUrl)
 
-      // Use the cloud name directly since env variable might not be set
-      const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'ds0bvuv2p'
-
-      const response = await fetch(
-        `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
-        {
-          method: 'POST',
-          body: formData,
-        }
-      )
-
-      const data = await response.json()
-
-      // Add error handling for Cloudinary response
-      if (!response.ok) {
-        console.error('Cloudinary error:', data)
-        throw new Error(data.error?.message || 'Upload failed')
-      }
-
-      if (data.secure_url) {
-        if (isEdit && editEvent) {
-          setEditEvent({ ...editEvent, poster_url: data.secure_url })
-        } else {
-          setNewEvent({ ...newEvent, poster_url: data.secure_url })
-        }
-        toast.success('Image uploaded successfully')
+      if (isEdit && editEvent) {
+        setEditEvent({ ...editEvent, poster_url: uploaded.url })
       } else {
-        throw new Error('No secure URL returned')
+        setNewEvent({ ...newEvent, poster_url: uploaded.url })
       }
+      toast.success('Image uploaded successfully')
     } catch (error) {
       console.error('Upload error:', error)
       toast.error(error instanceof Error ? error.message : 'Failed to upload image')
     } finally {
       setUploading(false)
+      // allow re-selecting the same file
+      e.target.value = ''
     }
   }
 
@@ -652,7 +643,10 @@ export default function EventsPage() {
                       type="button"
                       variant="ghost"
                       size="sm"
-                      onClick={() => setNewEvent({ ...newEvent, poster_url: '' })}
+                      onClick={async () => {
+                        await deleteCloudinaryUrl(newEvent.poster_url)
+                        setNewEvent({ ...newEvent, poster_url: '' })
+                      }}
                       className="mt-2 text-red-600"
                     >
                       Remove Image
@@ -750,7 +744,11 @@ export default function EventsPage() {
                         type="button"
                         variant="ghost"
                         size="sm"
-                        onClick={() => setEditEvent({ ...editEvent, poster_url: null })}
+                        onClick={async () => {
+                          if (!editEvent) return
+                          await deleteCloudinaryUrl(editEvent.poster_url)
+                          setEditEvent({ ...editEvent, poster_url: null })
+                        }}
                         className="mt-2 text-red-600"
                       >
                         Remove Image

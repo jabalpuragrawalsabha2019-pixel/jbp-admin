@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Switch } from '@/components/ui/switch'
 import { Settings as SettingsIcon, Bell, Shield, Database, Download } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { replaceAdminImage } from '@/lib/cloudinaryClient'
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(false)
@@ -73,27 +74,13 @@ export default function SettingsPage() {
 
     setUploading(true)
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('upload_preset', 'jbp_events')
-      formData.append('folder', 'jbp-agrawal-sabha/qr-codes')
-
-      const response = await fetch(
-        `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'YOUR_CLOUD_NAME'}/image/upload`,
-        {
-          method: 'POST',
-          body: formData,
-        }
+      const uploaded = await replaceAdminImage(
+        file,
+        'settings/qr-codes',
+        settings.upiQrCode,
       )
-
-      const data = await response.json()
-      
-      if (data.secure_url) {
-        setSettings({ ...settings, upiQrCode: data.secure_url })
-        toast.success('QR Code uploaded successfully')
-      } else {
-        throw new Error('Upload failed')
-      }
+      setSettings({ ...settings, upiQrCode: uploaded.url })
+      toast.success('QR Code uploaded successfully')
     } catch (error) {
       console.error('Upload error:', error)
       toast.error('Failed to upload QR code')

@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Search, CheckCircle, XCircle, Eye, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { deleteCloudinaryUrls } from '@/lib/cloudinaryClient'
 
 interface MatrimonialProfile {
   id: string
@@ -203,6 +204,17 @@ export default function MatrimonialPage() {
     }
 
     try {
+      const profile =
+        profiles.find((p) => p.id === profileId) || selectedProfile
+
+      if (profile) {
+        await deleteCloudinaryUrls([
+          ...(Array.isArray(profile.photos) ? profile.photos : []),
+          profile.parent_signature_url,
+          profile.candidate_signature_url,
+        ])
+      }
+
       const { error } = await supabase
         .from('matrimonial_profiles')
         .delete()

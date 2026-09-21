@@ -9,6 +9,10 @@ import { NextRequest } from 'next/server'
 import { corsOptions, json } from '@/lib/server/http'
 import { requireAdmin } from '@/lib/server/auth'
 import { getServiceSupabase } from '@/lib/server/supabaseAdmin'
+import {
+  collectUserMediaUrls,
+  destroyCloudinaryUrls,
+} from '@/lib/server/mediaCleanup'
 
 export async function OPTIONS() {
   return corsOptions()
@@ -79,6 +83,18 @@ export async function DELETE(request: NextRequest) {
     }
 
     const admin = getServiceSupabase()
+
+    // Remove Cloudinary assets before DB cascade deletes orphan them
+    const mediaUrls = await collectUserMediaUrls(userId)
+    const mediaResult = await destroyCloudinaryUrls(mediaUrls)
+
+    // Delete related content rows that hold media references
+    await admin.from('matrimonial_profiles').delete().eq('user_id', userId)
+    await admin.from('events').delete().eq('posted_by', userId)
+    await admin.from('jobs').delete().eq('posted_by', userId)
+    await admin.from('blood_donors').delete().eq('user_id', userId)
+    await admin.from('contact_requests').delete().eq('requester_id', userId)
+
     const { error } = await admin.from('users').delete().eq('id', userId)
     if (error) return json({ error: error.message }, 500)
 
@@ -87,10 +103,10 @@ export async function DELETE(request: NextRequest) {
       action: 'delete_user',
       target_type: 'users',
       target_id: userId,
-      details: {},
+      details: { mediaCleanup: mediaResult },
     })
 
-    return json({ success: true })
+    return json({ success: true, mediaCleanup: mediaResult })
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : 'Server error' }, 500)
   }
