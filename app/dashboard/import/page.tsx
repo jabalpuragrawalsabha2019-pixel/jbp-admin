@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { createBrowserClient } from '@/lib/supabase'
+import { adminApi } from '@/lib/adminApi'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Upload, FileSpreadsheet, CheckCircle, XCircle } from 'lucide-react'
@@ -90,10 +91,18 @@ export default function ImportPage() {
             .single()
 
           if (existingUser) {
-            await supabase
-              .from('users')
-              .update({ is_verified: true })
-              .eq('id', existingUser.id)
+            // Imported roster members get BOTH flags: verification (feature
+            // access) and membership (gold badge). Both are pinned by
+            // protect_user_privileges, so this must go through the service-role
+            // API — the anon browser client would be silently reverted.
+            const { error: flagErr } = await adminApi('/api/admin/users', 'PATCH', {
+              userId: existingUser.id,
+              is_verified: true,
+              is_member: true,
+            })
+            if (flagErr) {
+              throw new Error(`Could not update user ${member.phone}: ${flagErr}`)
+            }
           }
 
           successCount++
