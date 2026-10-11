@@ -5,7 +5,8 @@ import Link from 'next/link'
 import { 
   LayoutDashboard, Users, Heart, Calendar, Briefcase, 
   Droplet, DollarSign, Award, Upload, Settings, 
-  LogOut, Menu, X, MessageSquare, UserX
+  LogOut, Menu, X, MessageSquare, UserX, Store, Bell,
+  Sparkles, ListChecks, ScrollText, Megaphone
 } from 'lucide-react'
 import { useState } from 'react'
 import { createBrowserClient } from '@/lib/supabase'
@@ -15,14 +16,23 @@ import toast from 'react-hot-toast'
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Users', href: '/dashboard/users', icon: Users },
+  { name: 'Membership Requests', href: '/dashboard/membership-requests', icon: Award },
+  { name: 'Businesses', href: '/dashboard/businesses', icon: Store },
+  { name: 'Advertisements', href: '/dashboard/advertisements', icon: Megaphone },
+  { name: 'Payment Requests', href: '/dashboard/payments', icon: DollarSign },
+  { name: 'Notifications', href: '/dashboard/notifications', icon: Bell },
   { name: 'Matrimonial', href: '/dashboard/matrimonial', icon: Heart },
   { name: 'Events', href: '/dashboard/events', icon: Calendar },
   { name: 'Jobs', href: '/dashboard/jobs', icon: Briefcase },
   { name: 'Blood Donors', href: '/dashboard/blood-donors', icon: Droplet },
   { name: 'Donations', href: '/dashboard/donations', icon: DollarSign },
+  { name: 'Categories & Packages', href: '/dashboard/catalog', icon: ListChecks },
+  { name: 'Ongoing Activities', href: '/dashboard/activities', icon: Sparkles },
+  { name: 'Festival Themes', href: '/dashboard/festivals', icon: Sparkles },
   { name: 'Post Holders', href: '/dashboard/post-holders', icon: Award },
   { name: 'Contact Requests', href: '/dashboard/contact-requests', icon: MessageSquare },
   { name: 'Deletion Requests', href: '/dashboard/deletion-requests', icon: UserX },
+  { name: 'Admin Activity Log', href: '/dashboard/activity-log', icon: ScrollText },
   { name: 'Import Members', href: '/dashboard/import', icon: Upload },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
 ]

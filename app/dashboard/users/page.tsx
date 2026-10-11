@@ -1,14 +1,15 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createBrowserClient } from '@/lib/supabase'
+import { adminApi } from '@/lib/adminApi'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Search, CheckCircle, XCircle, Eye, Trash2, Shield, ShieldOff } from 'lucide-react'
+import { Search, CheckCircle, XCircle, Eye, Trash2, Shield, ShieldOff, Award } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 interface User {
@@ -19,6 +20,8 @@ interface User {
   city: string | null
   occupation: string | null
   is_verified: boolean
+  is_member: boolean
+  member_since: string | null
   is_admin: boolean
   photo_url: string | null
   created_at: string
@@ -26,9 +29,9 @@ interface User {
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([])
-  const [filteredUsers, setFilteredUsers] = useState<User[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [verificationFilter, setVerificationFilter] = useState<string>('all')
+  const [membershipFilter, setMembershipFilter] = useState<string>('all')
   const [roleFilter, setRoleFilter] = useState<string>('all')
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
@@ -37,10 +40,6 @@ export default function UsersPage() {
   useEffect(() => {
     fetchUsers()
   }, [])
-
-  useEffect(() => {
-    filterUsers()
-  }, [users, searchQuery, verificationFilter, roleFilter])
 
   const fetchUsers = async () => {
     try {
@@ -59,7 +58,17 @@ export default function UsersPage() {
     }
   }
 
-  const filterUsers = () => {
+  /**
+   * Derived rather than stored.
+   *
+   * This used to keep a second `filteredUsers` state array kept in sync by an
+   * effect, so every keystroke allocated a fresh copy AND cost an extra render
+   * pass. The filters are a pure function of their inputs, so useMemo computes
+   * the same list without the duplicated state. Recomputes only when the source
+   * list or a filter actually changes — and `fetchUsers()` after any CRUD write
+   * still flows through automatically because `users` changes.
+   */
+  const filteredUsers = useMemo(() => {
     let filtered = [...users]
 
     if (searchQuery) {
@@ -76,23 +85,31 @@ export default function UsersPage() {
       )
     }
 
+    if (membershipFilter !== 'all') {
+      filtered = filtered.filter(user =>
+        membershipFilter === 'member' ? user.is_member : !user.is_member
+      )
+    }
+
     if (roleFilter !== 'all') {
       filtered = filtered.filter(user => 
         roleFilter === 'admin' ? user.is_admin : !user.is_admin
       )
     }
 
-    setFilteredUsers(filtered)
-  }
+    return filtered
+  }, [users, searchQuery, verificationFilter, membershipFilter, roleFilter])
 
+  /**
+   * Toggles is_verified via the secured admin API (service role).
+   */
   const toggleVerification = async (userId: string, currentStatus: boolean) => {
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({ is_verified: !currentStatus })
-        .eq('id', userId)
-
-      if (error) throw error
+      const { error } = await adminApi('/api/admin/users', 'PATCH', {
+        userId,
+        is_verified: !currentStatus,
+      })
+      if (error) throw new Error(error)
 
       toast.success(`User ${!currentStatus ? 'verified' : 'unverified'} successfully`)
       fetchUsers()
@@ -101,14 +118,36 @@ export default function UsersPage() {
     }
   }
 
+  /**
+   * Toggles society membership via the secured admin API (service role).
+   * Membership is intentionally separate from is_verified: verification gates
+   * feature access (posting, contact details), membership drives the gold badge.
+   */
+  const toggleMembership = async (userId: string, currentStatus: boolean) => {
+    try {
+      const { error } = await adminApi('/api/admin/users', 'PATCH', {
+        userId,
+        is_member: !currentStatus,
+      })
+      if (error) throw new Error(error)
+
+      toast.success(`Member ${!currentStatus ? 'granted' : 'removed'} successfully`)
+      fetchUsers()
+    } catch (error) {
+      toast.error('Failed to update membership status')
+    }
+  }
+
+  /**
+   * Toggles is_admin via the secured admin API (service role).
+   */
   const toggleAdmin = async (userId: string, currentStatus: boolean) => {
     try {
-      const { error } = await supabase
-        .from('users')
-        .update({ is_admin: !currentStatus })
-        .eq('id', userId)
-
-      if (error) throw error
+      const { error } = await adminApi('/api/admin/users', 'PATCH', {
+        userId,
+        is_admin: !currentStatus,
+      })
+      if (error) throw new Error(error)
 
       toast.success(`Admin status ${!currentStatus ? 'granted' : 'revoked'} successfully`)
       fetchUsers()
@@ -117,18 +156,17 @@ export default function UsersPage() {
     }
   }
 
+  /**
+   * Deletes a user via the secured admin API (service role).
+   */
   const deleteUser = async (userId: string) => {
     if (!confirm('Are you sure you want to delete this user? This action cannot be undone.')) {
       return
     }
 
     try {
-      const { error } = await supabase
-        .from('users')
-        .delete()
-        .eq('id', userId)
-
-      if (error) throw error
+      const { error } = await adminApi('/api/admin/users', 'DELETE', { userId })
+      if (error) throw new Error(error)
 
       toast.success('User deleted successfully')
       fetchUsers()
@@ -174,6 +212,16 @@ export default function UsersPage() {
                 <SelectItem value="unverified">Unverified</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={membershipFilter} onValueChange={setMembershipFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Membership" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Members</SelectItem>
+                <SelectItem value="member">Members</SelectItem>
+                <SelectItem value="nonmember">Non-Members</SelectItem>
+              </SelectContent>
+            </Select>
             <Select value={roleFilter} onValueChange={setRoleFilter}>
               <SelectTrigger>
                 <SelectValue placeholder="Role" />
@@ -185,7 +233,7 @@ export default function UsersPage() {
               </SelectContent>
             </Select>
             <div className="text-sm text-gray-600 flex items-center">
-              Total: {filteredUsers.length} users
+              Total: {filteredUsers.length} users · {users.filter((u) => u.is_member).length} members
             </div>
           </div>
         </CardContent>
@@ -202,6 +250,7 @@ export default function UsersPage() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Contact</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Location</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Membership</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                 </tr>
@@ -239,6 +288,16 @@ export default function UsersPage() {
                       )}
                     </td>
                     <td className="px-6 py-4">
+                      {user.is_member ? (
+                        <Badge className="bg-yellow-100 text-yellow-800 hover:bg-yellow-100">
+                          <Award className="w-3 h-3 mr-1" />
+                          Member
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline">Not member</Badge>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
                       {user.is_admin ? (
                         <Badge className="bg-purple-100 text-purple-800 hover:bg-purple-100">
                           <Shield className="w-3 h-3 mr-1" />
@@ -260,9 +319,19 @@ export default function UsersPage() {
                         <Button
                           size="sm"
                           variant={user.is_verified ? "outline" : "default"}
+                          title={user.is_verified ? 'Unverify (feature access)' : 'Verify (feature access)'}
                           onClick={() => toggleVerification(user.id, user.is_verified)}
                         >
                           {user.is_verified ? <XCircle className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={user.is_member ? "outline" : "default"}
+                          title={user.is_member ? 'Remove membership' : 'Grant membership'}
+                          className={!user.is_member ? "bg-yellow-500 hover:bg-yellow-600 text-white" : ""}
+                          onClick={() => toggleMembership(user.id, user.is_member)}
+                        >
+                          <Award className="w-4 h-4" />
                         </Button>
                         <Button
                           size="sm"
@@ -321,11 +390,23 @@ export default function UsersPage() {
                   <p className="text-gray-900">{selectedUser.is_verified ? 'Verified' : 'Unverified'}</p>
                 </div>
                 <div>
+                  <label className="text-sm font-medium text-gray-500">Membership</label>
+                  <p className="text-gray-900 flex items-center gap-1.5">
+                    {selectedUser.is_member && <Award className="w-4 h-4 text-yellow-600" />}
+                    {selectedUser.is_member ? 'Member' : 'Not a member'}
+                  </p>
+                  {selectedUser.member_since && (
+                    <p className="text-xs text-gray-500">
+                      since {new Date(selectedUser.member_since).toLocaleDateString()}
+                    </p>
+                  )}
+                </div>
+                <div>
                   <label className="text-sm font-medium text-gray-500">Role</label>
                   <p className="text-gray-900">{selectedUser.is_admin ? 'Admin' : 'User'}</p>
                 </div>
               </div>
-              <div className="flex space-x-2 pt-4">
+              <div className="flex flex-wrap gap-2 pt-4">
                 <Button
                   variant={selectedUser.is_verified ? "outline" : "default"}
                   onClick={() => {
@@ -335,6 +416,19 @@ export default function UsersPage() {
                   className="flex-1"
                 >
                   {selectedUser.is_verified ? 'Unverify' : 'Verify'} User
+                </Button>
+                <Button
+                  variant={selectedUser.is_member ? "outline" : "default"}
+                  className={
+                    selectedUser.is_member ? "flex-1" : "flex-1 bg-yellow-500 hover:bg-yellow-600 text-white"
+                  }
+                  onClick={() => {
+                    toggleMembership(selectedUser.id, selectedUser.is_member)
+                    setSelectedUser({ ...selectedUser, is_member: !selectedUser.is_member })
+                  }}
+                >
+                  <Award className="w-4 h-4 mr-2" />
+                  {selectedUser.is_member ? 'Remove Member' : 'Make Member'}
                 </Button>
                 <Button
                   variant={selectedUser.is_admin ? "outline" : "default"}
