@@ -43,6 +43,7 @@ interface MembershipPayment {
   status: 'pending' | 'approved' | 'rejected'
   amount: number
   amount_paid: number | null
+  plan_id: string | null
   proof_url: string | null
   reference: string | null
   upi_id: string | null
@@ -72,13 +73,41 @@ interface MembershipRequest {
   city: string | null
   pincode: string | null
   photo_url: string | null
+  // plan + the fee that was due when it was submitted (immutable snapshot)
+  membership_plan: string | null
   membership_type: string | null
   applicant_notes: string | null
   fee_amount: number | null
+  // spouse snapshot, only filled for the lifetime_spouse plan
+  spouse_full_name: string | null
+  spouse_phone: string | null
+  spouse_email: string | null
+  spouse_date_of_birth: string | null
+  spouse_gender: string | null
+  spouse_gotra: string | null
+  spouse_occupation: string | null
+  spouse_business_name: string | null
+  spouse_father_guardian_name: string | null
+  spouse_father_mobile: string | null
+  spouse_address: string | null
+  spouse_city: string | null
+  spouse_pincode: string | null
+  spouse_photo_url: string | null
   payment_request_id: string | null
   matrimonial_profile_id: string | null
   users: Applicant | null
   payment_requests: MembershipPayment | null
+}
+
+/** Label for a stored plan value. Legacy rows still carry membership_type. */
+function planLabel(r: MembershipRequest): string | null {
+  const value = r.membership_plan || r.membership_type
+  if (!value) return null
+  if (value === 'lifetime_spouse') return 'Lifetime with Spouse'
+  if (value === 'lifetime' || ['family', 'individual', 'patron'].includes(value)) {
+    return 'Lifetime'
+  }
+  return value
 }
 
 const STATUS_TONE: Record<string, string> = {
@@ -269,10 +298,8 @@ export default function MembershipRequestsPage() {
                       <Badge className={STATUS_TONE[r.status]}>
                         {r.status.charAt(0).toUpperCase() + r.status.slice(1)}
                       </Badge>
-                      {r.membership_type && (
-                        <Badge className="bg-blue-100 text-blue-800 capitalize">
-                          {r.membership_type}
-                        </Badge>
+                      {planLabel(r) && (
+                        <Badge className="bg-blue-100 text-blue-800">{planLabel(r)}</Badge>
                       )}
                       {r.payment_requests && (
                         <Badge
@@ -395,10 +422,13 @@ export default function MembershipRequestsPage() {
                 <Detail label="City" value={selected.city} />
                 <Detail label="Pincode" value={selected.pincode} />
                 <Detail
-                  label="Membership type"
-                  value={selected.membership_type || '—'}
+                  label="Membership plan"
+                  value={planLabel(selected) || '—'}
                 />
-                <Detail label="Fee" value={selected.fee_amount ? `₹${selected.fee_amount}` : null} />
+                <Detail
+                  label="Fee due at submission"
+                  value={selected.fee_amount ? `₹${selected.fee_amount}` : null}
+                />
                 <Detail
                   label="Payment status"
                   value={selected.payment_requests?.status || 'none'}
@@ -414,6 +444,42 @@ export default function MembershipRequestsPage() {
                 <Detail label="UPI ID used" value={selected.payment_requests?.upi_id} />
                 <Detail label="UPI reference" value={selected.payment_requests?.reference} />
               </div>
+
+              {selected.spouse_full_name && (
+                <div className="rounded-lg border p-4">
+                  <p className="text-sm font-semibold text-gray-900 mb-2">
+                    Spouse (Lifetime Membership with Spouse)
+                  </p>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <Detail label="Spouse name" value={selected.spouse_full_name} />
+                    <Detail
+                      label="Phone"
+                      value={selected.spouse_phone ? `+91 ${selected.spouse_phone}` : null}
+                    />
+                    <Detail label="Email" value={selected.spouse_email} />
+                    <Detail label="Date of birth" value={selected.spouse_date_of_birth} />
+                    <Detail label="Gender" value={selected.spouse_gender} />
+                    <Detail label="Gotra" value={selected.spouse_gotra} />
+                    <Detail label="Occupation" value={selected.spouse_occupation} />
+                    <Detail label="Business / firm" value={selected.spouse_business_name} />
+                    <Detail
+                      label="Father / guardian"
+                      value={selected.spouse_father_guardian_name}
+                    />
+                    <Detail
+                      label="Guardian mobile"
+                      value={
+                        selected.spouse_father_mobile
+                          ? `+91 ${selected.spouse_father_mobile}`
+                          : null
+                      }
+                    />
+                    <Detail label="Address" value={selected.spouse_address} />
+                    <Detail label="City" value={selected.spouse_city} />
+                    <Detail label="Pincode" value={selected.spouse_pincode} />
+                  </div>
+                </div>
+              )}
 
               {selected.photo_url && (
                 <div>

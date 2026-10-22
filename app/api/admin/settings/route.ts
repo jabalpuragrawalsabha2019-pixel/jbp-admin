@@ -7,6 +7,8 @@
  *
  * Known keys
  *   advertising.price_per_day  — per-day advertisement rate (number)
+ *   membership.fee              — Lifetime Membership fee (number)
+ *   membership.fee_spouse       — Lifetime Membership with Spouse fee (number)
  *   payment.upi_id / payment.upi_name / payment.qr_url
  *   app.name / app.contact_email / app.contact_phone
  *
@@ -21,12 +23,26 @@ import { getServiceSupabase } from '@/lib/server/supabaseAdmin'
 /** Keys the admin panel is allowed to write. */
 const WRITABLE = new Set([
   'advertising.price_per_day',
+  'membership.fee',
+  'membership.fee_spouse',
   'payment.upi_id',
   'payment.upi_name',
   'payment.qr_url',
   'app.name',
   'app.contact_email',
   'app.contact_phone',
+])
+
+/**
+ * Membership fees are validated here so an unusable value can never reach the
+ * pricing triggers (membership_plan_fee() treats anything non-numeric as
+ * "not configured", which would silently disable a plan). An empty value is
+ * allowed on purpose: it means "plan not offered yet".
+ */
+const NUMERIC = new Set([
+  'advertising.price_per_day',
+  'membership.fee',
+  'membership.fee_spouse',
 ])
 
 export async function OPTIONS() {
@@ -75,11 +91,25 @@ export async function POST(request: NextRequest) {
     if (!WRITABLE.has(key)) return json({ error: `Unknown setting: ${key}` }, 400)
 
     // Numeric settings are validated here so a bad value can never reach the
-    // advertising price trigger.
-    if (key === 'advertising.price_per_day') {
-      const n = Number(value)
-      if (!Number.isFinite(n) || n < 0) {
-        return json({ error: 'price_per_day must be a non-negative number' }, 400)
+    // advertising price trigger or the membership plan pricing.
+    if (NUMERIC.has(key)) {
+      const raw = value.trim()
+      const isMembershipFee = key.startsWith('membership.')
+      const emptyMeansDisabled = isMembershipFee && raw === ''
+
+      if (!emptyMeansDisabled) {
+        const n = Number(raw)
+        const validFormat = /^\d+(\.\d{1,2})?$/.test(raw)
+        if (!validFormat || !Number.isFinite(n) || (isMembershipFee ? n <= 0 : n < 0)) {
+          return json(
+            {
+              error: isMembershipFee
+                ? `${key} must be a positive amount with up to 2 decimals, or empty to disable the plan`
+                : 'price_per_day must be a non-negative number',
+            },
+            400,
+          )
+        }
       }
     }
 

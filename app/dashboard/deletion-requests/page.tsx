@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { UserX, Eye, CheckCircle, XCircle, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { deleteCloudinaryUrls } from '@/lib/cloudinaryClient'
 
 interface DeletionRequest {
   id: string
@@ -100,7 +101,7 @@ export default function DeletionRequestsPage() {
       // Find user by phone
       const { data: user } = await supabase
         .from('users')
-        .select('id')
+        .select('id, photo_url')
         .eq('phone', phone)
         .single()
 
@@ -108,6 +109,28 @@ export default function DeletionRequestsPage() {
         toast.error('User not found')
         return
       }
+
+      // Collect Cloudinary assets before DB deletes
+      const { data: profiles } = await supabase
+        .from('matrimonial_profiles')
+        .select('photos, parent_signature_url, candidate_signature_url')
+        .eq('user_id', user.id)
+
+      const { data: userEvents } = await supabase
+        .from('events')
+        .select('poster_url')
+        .eq('posted_by', user.id)
+
+      const mediaUrls: Array<string | null | undefined> = [user.photo_url]
+      for (const profile of profiles || []) {
+        if (Array.isArray(profile.photos)) mediaUrls.push(...profile.photos)
+        mediaUrls.push(profile.parent_signature_url, profile.candidate_signature_url)
+      }
+      for (const event of userEvents || []) {
+        mediaUrls.push(event.poster_url)
+      }
+
+      await deleteCloudinaryUrls(mediaUrls)
 
       // Delete all related data
       await supabase.from('matrimonial_profiles').delete().eq('user_id', user.id)

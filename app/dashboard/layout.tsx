@@ -6,7 +6,8 @@ import {
   LayoutDashboard, Users, Heart, Calendar, Briefcase, 
   Droplet, DollarSign, Award, Upload, Settings, 
   LogOut, Menu, X, MessageSquare, UserX, Store, Bell,
-  Sparkles, ListChecks, ScrollText, Megaphone
+  Sparkles, ListChecks, ScrollText, Megaphone,
+  HelpCircle, Star
 } from 'lucide-react'
 import { useState } from 'react'
 import { createBrowserClient } from '@/lib/supabase'
@@ -23,6 +24,7 @@ const navigation = [
   { name: 'Notifications', href: '/dashboard/notifications', icon: Bell },
   { name: 'Matrimonial', href: '/dashboard/matrimonial', icon: Heart },
   { name: 'Events', href: '/dashboard/events', icon: Calendar },
+  { name: 'Event Reviews', href: '/dashboard/event-reviews', icon: Star },
   { name: 'Jobs', href: '/dashboard/jobs', icon: Briefcase },
   { name: 'Blood Donors', href: '/dashboard/blood-donors', icon: Droplet },
   { name: 'Donations', href: '/dashboard/donations', icon: DollarSign },
@@ -31,6 +33,7 @@ const navigation = [
   { name: 'Festival Themes', href: '/dashboard/festivals', icon: Sparkles },
   { name: 'Post Holders', href: '/dashboard/post-holders', icon: Award },
   { name: 'Contact Requests', href: '/dashboard/contact-requests', icon: MessageSquare },
+  { name: 'Help Requests', href: '/dashboard/help-requests', icon: HelpCircle },
   { name: 'Deletion Requests', href: '/dashboard/deletion-requests', icon: UserX },
   { name: 'Admin Activity Log', href: '/dashboard/activity-log', icon: ScrollText },
   { name: 'Import Members', href: '/dashboard/import', icon: Upload },
