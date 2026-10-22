@@ -1,22 +1,46 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createBrowserClient } from '@/lib/supabase'
+import { adminApi } from '@/lib/adminApi'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Eye, Phone, Mail, Heart, Clock, CheckCircle, XCircle } from 'lucide-react'
+import { Textarea } from '@/components/ui/textarea'
+import { Eye, Heart, Clock, CheckCircle, XCircle, User, IdCard } from 'lucide-react'
 import toast from 'react-hot-toast'
 
+/**
+ * One row from public.get_contact_requests_for_admin().
+ *
+ * The requester may have sent one of their own matrimonial profiles OR their
+ * personal details ("Other / Personal Profile"), so both shapes are carried.
+ */
 interface ContactRequest {
   id: string
-  profile_id: string
-  requester_id: string
+  profile_id: uuidOrNull
+  requester_id: uuidOrNull
+  requester_profile_id: uuidOrNull
+  use_personal_profile: boolean
+  personal_name: string | null
+  personal_phone: string | null
+  personal_email: string | null
+  personal_gotra: string | null
+  personal_city: string | null
   status: string
   created_at: string
+  reviewed_at: string | null
+  reviewed_by: string | null
+  admin_notes: string | null
+  profile_candidate_name: string | null
+  profile_user_id: uuidOrNull
+  requester_full_name: string | null
+  requester_phone: string | null
+  requester_email: string | null
 }
+
+type uuidOrNull = string | null
 
 export default function ContactRequestsPage() {
   const [requests, setRequests] = useState<ContactRequest[]>([])
@@ -24,41 +48,57 @@ export default function ContactRequestsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [selectedRequest, setSelectedRequest] = useState<ContactRequest | null>(null)
   const [loading, setLoading] = useState(true)
-  const supabase = createBrowserClient()
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [notes, setNotes] = useState('')
 
-  useEffect(() => {
-    fetchRequests()
-  }, [])
-
-  useEffect(() => {
-    filterRequests()
-  }, [requests, statusFilter])
-
-  const fetchRequests = async () => {
+  const fetchRequests = async (status: string) => {
+    setLoading(true)
     try {
-      const { data, error } = await supabase
-        .from('contact_requests')
-        .select('*')
-        .order('created_at', { ascending: false })
-
-      if (error) throw error
+      const { data, error } = await adminApi<ContactRequest[]>(
+        `/api/admin/contact-requests?status=${status === 'all' ? 'all' : status}`,
+        'GET',
+      )
+      if (error) throw new Error(error)
       setRequests(data || [])
     } catch (error) {
-      console.error('Error fetching requests:', error)
+      console.error('Error fetching contact requests:', error)
       toast.error('Failed to fetch contact requests')
     } finally {
       setLoading(false)
     }
   }
 
-  const filterRequests = () => {
-    let filtered = [...requests]
+  useEffect(() => {
+    fetchRequests(statusFilter)
+  }, [statusFilter])
 
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(req => req.status === statusFilter)
+  useEffect(() => {
+    setFilteredRequests(requests)
+  }, [requests])
+
+  /**
+   * Accept or reject a request. The decision is made by
+   * public.review_contact_request(), which is admin-only.
+   */
+  const review = async (id: string, decision: 'accepted' | 'rejected') => {
+    setBusyId(id)
+    try {
+      const { error } = await adminApi('/api/admin/contact-requests', 'PATCH', {
+        id,
+        decision,
+        notes: notes.trim() || null,
+      })
+      if (error) throw new Error(error)
+      toast.success(`Request ${decision}`)
+      setSelectedRequest(null)
+      setNotes('')
+      fetchRequests(statusFilter)
+    } catch (error) {
+      console.error('Error reviewing contact request:', error)
+      toast.error('Failed to review contact request')
+    } finally {
+      setBusyId(null)
     }
-
-    setFilteredRequests(filtered)
   }
 
   const getStatusBadge = (status: string) => {
@@ -197,7 +237,8 @@ export default function ContactRequestsPage() {
               <thead className="bg-gray-50 border-b">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Request ID</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Profile ID</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Profile</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Requester</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
@@ -207,20 +248,59 @@ export default function ContactRequestsPage() {
                 {filteredRequests.map((request) => (
                   <tr key={request.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 text-sm text-gray-900">{request.id.slice(0, 8)}...</td>
-                    <td className="px-6 py-4 text-sm text-gray-900">{request.profile_id.slice(0, 8)}...</td>
+                    <td className="px-6 py-4 text-sm text-gray-900">
+                      {request.profile_candidate_name ||
+                        (request.profile_id ? request.profile_id.slice(0, 8) + '...' : '—')}
+                    </td>
+                    <td className="px-6 py-4 text-sm text-gray-900">
+                      {request.requester_full_name ||
+                        (request.requester_id
+                          ? request.requester_id.slice(0, 8) + '...'
+                          : '—')}
+                      <span className="block text-xs text-gray-500">
+                        {request.use_personal_profile
+                          ? 'Personal profile'
+                          : 'Matrimonial profile'}
+                      </span>
+                    </td>
                     <td className="px-6 py-4">{getStatusBadge(request.status)}</td>
                     <td className="px-6 py-4 text-sm text-gray-500">
                       {new Date(request.created_at).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setSelectedRequest(request)}
-                      >
-                        <Eye className="w-4 h-4 mr-2" />
-                        View
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setSelectedRequest(request)
+                            setNotes('')
+                          }}
+                        >
+                          <Eye className="w-4 h-4 mr-2" />
+                          View
+                        </Button>
+                        {request.status === 'pending' && (
+                          <>
+                            <Button
+                              size="sm"
+                              className="bg-green-600 hover:bg-green-700"
+                              disabled={busyId === request.id}
+                              onClick={() => review(request.id, 'accepted')}
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              className="bg-red-600 hover:bg-red-700"
+                              disabled={busyId === request.id}
+                              onClick={() => review(request.id, 'rejected')}
+                            >
+                              <XCircle className="w-4 h-4" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -255,27 +335,112 @@ export default function ContactRequestsPage() {
                   <p className="text-gray-900">{selectedRequest.id}</p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Profile ID</label>
-                  <p className="text-gray-900">{selectedRequest.profile_id}</p>
+                  <label className="text-sm font-medium text-gray-500">Target profile</label>
+                  <p className="text-gray-900">
+                    {selectedRequest.profile_candidate_name || 'Unknown profile'}
+                  </p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Requester ID</label>
-                  <p className="text-gray-900">{selectedRequest.requester_id}</p>
+                  <label className="text-sm font-medium text-gray-500">Requester</label>
+                  <p className="text-gray-900">
+                    {selectedRequest.requester_full_name || 'Unknown member'}
+                  </p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Status</label>
-                  <div className="mt-1">{getStatusBadge(selectedRequest.status)}</div>
+                  <label className="text-sm font-medium text-gray-500">Requester phone</label>
+                  <p className="text-gray-900">
+                    {selectedRequest.requester_phone
+                      ? `+91 ${selectedRequest.requester_phone}`
+                      : '—'}
+                  </p>
                 </div>
               </div>
 
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <p className="text-sm text-blue-900">
-                  <strong>Note:</strong> This is an informational view. Users manage their own contact requests 
-                  through the mobile app. The status shown reflects the profile owner's response.
+              {/* ---- What the requester sent ---- */}
+              <div className="border rounded-lg p-4 space-y-3">
+                <p className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+                  {selectedRequest.use_personal_profile ? (
+                    <>
+                      <User className="w-4 h-4" /> Other / Personal Profile
+                    </>
+                  ) : (
+                    <>
+                      <IdCard className="w-4 h-4" /> Matrimonial profile sent
+                    </>
+                  )}
                 </p>
+
+                {selectedRequest.use_personal_profile ? (
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <p className="text-xs text-gray-500">Name</p>
+                      <p className="font-medium">
+                        {selectedRequest.personal_name || '—'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Phone</p>
+                      <p className="font-medium">
+                        {selectedRequest.personal_phone
+                          ? `+91 ${selectedRequest.personal_phone}`
+                          : '—'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Email</p>
+                      <p className="font-medium">
+                        {selectedRequest.personal_email || '—'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500">Gotra / City</p>
+                      <p className="font-medium">
+                        {[selectedRequest.personal_gotra, selectedRequest.personal_city]
+                          .filter(Boolean)
+                          .join(' • ') || '—'}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-700">
+                    The requester sent one of their own matrimonial profiles
+                    (profile id {selectedRequest.requester_profile_id || '—'}). Their
+                    details are visible on that profile.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-500">Notes</label>
+                <Textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Optional note to the requester"
+                  rows={3}
+                />
               </div>
             </div>
           )}
+          <DialogFooter>
+            {selectedRequest && selectedRequest.status === 'pending' && (
+              <>
+                <Button
+                  className="bg-red-600 hover:bg-red-700"
+                  disabled={busyId === selectedRequest.id}
+                  onClick={() => review(selectedRequest.id, 'rejected')}
+                >
+                  <XCircle className="w-4 h-4 mr-1" /> Reject
+                </Button>
+                <Button
+                  className="bg-green-600 hover:bg-green-700"
+                  disabled={busyId === selectedRequest.id}
+                  onClick={() => review(selectedRequest.id, 'accepted')}
+                >
+                  <CheckCircle className="w-4 h-4 mr-1" /> Accept
+                </Button>
+              </>
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

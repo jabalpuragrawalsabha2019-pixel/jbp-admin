@@ -1,8 +1,8 @@
 /**
- * Admin privilege APIs for users (verified / admin flags, delete).
- * All actions require a verified admin JWT; mutations use the service role.
+ * Admin privilege APIs for users (verified / member / admin flags, delete).
+ * All actions require an admin JWT; mutations use the service role.
  *
- * PATCH — { userId, is_verified?, is_admin? }
+ * PATCH — { userId, is_verified?, is_member?, is_admin? }
  * DELETE — { userId }
  */
 import { NextRequest } from 'next/server'
@@ -34,6 +34,12 @@ export async function PATCH(request: NextRequest) {
     if (typeof body.is_verified === 'boolean') {
       updates.is_verified = body.is_verified
     }
+    if (typeof body.is_member === 'boolean') {
+      updates.is_member = body.is_member
+      // member_since records when membership was granted, and is cleared when
+      // it is withdrawn. Membership is independent of is_verified on purpose.
+      updates.member_since = body.is_member ? new Date().toISOString() : null
+    }
     if (typeof body.is_admin === 'boolean') {
       // Prevent an admin from removing their own admin flag accidentally locking everyone out
       if (userId === adminUser.id && body.is_admin === false) {
@@ -51,7 +57,7 @@ export async function PATCH(request: NextRequest) {
       .from('users')
       .update(updates)
       .eq('id', userId)
-      .select('id, full_name, is_verified, is_admin')
+      .select('id, full_name, is_verified, is_member, member_since, is_admin')
       .maybeSingle()
 
     if (error) return json({ error: error.message }, 500)

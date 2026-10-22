@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { adminApi } from '@/lib/adminApi'
 import { createBrowserClient } from '@/lib/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,9 +9,37 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Switch } from '@/components/ui/switch'
-import { Settings as SettingsIcon, Bell, Shield, Database, Download } from 'lucide-react'
+import {
+  Settings as SettingsIcon,
+  Bell,
+  Shield,
+  Database,
+  Download,
+  CreditCard,
+} from 'lucide-react'
 import toast from 'react-hot-toast'
 import { replaceAdminImage } from '@/lib/cloudinaryClient'
+
+/**
+ * The two society membership plans and the app_settings key that holds each
+ * plan's fee. There is deliberately no default here: a blank fee means "not
+ * configured", which the mobile form shows as such and the database refuses to
+ * charge — rather than inventing a price.
+ */
+const MEMBERSHIP_PLAN_FIELDS = [
+  {
+    key: 'membership.fee',
+    name: 'lifetime',
+    label: 'Lifetime Membership',
+    description: 'Single lifetime member. Fee charged for the Lifetime Membership plan.',
+  },
+  {
+    key: 'membership.fee_spouse',
+    name: 'lifetime_spouse',
+    label: 'Lifetime Membership with Spouse',
+    description: 'Lifetime member plus spouse. Fee charged for that plan only.',
+  },
+] as const
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(false)
@@ -26,11 +55,17 @@ export default function SettingsPage() {
     emailNotifications: true,
     smsNotifications: false,
   })
+  const [planFees, setPlanFees] = useState<Record<string, string>>({
+    lifetime: '',
+    lifetime_spouse: '',
+  })
+  const [savingFees, setSavingFees] = useState(false)
 
   const supabase = createBrowserClient()
 
   useEffect(() => {
     fetchAdminUser()
+    fetchPlanFees()
   }, [])
 
   const fetchAdminUser = async () => {
@@ -46,6 +81,71 @@ export default function SettingsPage() {
       }
     } catch (error) {
       console.error('Error fetching admin user:', error)
+    }
+  }
+
+  /**
+   * Reads the current plan fees through the secured admin API (service role) so
+   * the dashboard never depends on the browser's own RLS view.
+   */
+  const fetchPlanFees = useCallback(async () => {
+    try {
+      const { data, error } = await adminApi<{ setting_key: string; setting_value: string }[]>(
+        '/api/admin/settings',
+        'GET',
+      )
+      if (error) {
+        toast.error(error)
+        return
+      }
+      const map: Record<string, string> = {}
+      ;(data || []).forEach((row) => {
+        map[row.setting_key] = row.setting_value ?? ''
+      })
+      setPlanFees((prev) => ({
+        lifetime: map['membership.fee'] ?? prev.lifetime,
+        lifetime_spouse: map['membership.fee_spouse'] ?? prev.lifetime_spouse,
+      }))
+    } catch (error) {
+      console.error('Error loading plan fees:', error)
+    }
+  }, [])
+
+  /**
+   * Saves the two plan fees independently.
+   *
+   * Both are validated client-side for feedback AND on the server before the
+   * write. Changing a fee only affects applications submitted afterwards: each
+   * membership request keeps the fee that was due at submission, so existing
+   * payments are never repriced.
+   */
+  const handleSavePlanFees = async () => {
+    const invalid = MEMBERSHIP_PLAN_FIELDS.find(({ name }) => {
+      const raw = String(planFees[name] ?? '').trim()
+      if (raw === '') return false // allowed: an unset fee simply disables the plan
+      return !/^\d+(\.\d{1,2})?$/.test(raw) || Number(raw) <= 0
+    })
+    if (invalid) {
+      toast.error(`${invalid.label}: enter a positive amount (e.g. 1000 or 1000.50), or leave it empty to disable`)
+      return
+    }
+
+    setSavingFees(true)
+    try {
+      for (const { key, name } of MEMBERSHIP_PLAN_FIELDS) {
+        const value = String(planFees[name] ?? '').trim()
+        // Saving an emptied field writes an empty value = "not configured yet",
+        // which is how the spouse plan ships. Never skip it silently.
+        const { error } = await adminApi('/api/admin/settings', 'POST', { key, value })
+        if (error) {
+          toast.error(error)
+          return
+        }
+      }
+      toast.success('Membership plan fees saved')
+      fetchPlanFees()
+    } finally {
+      setSavingFees(false)
     }
   }
 
@@ -161,6 +261,10 @@ export default function SettingsPage() {
             <SettingsIcon className="w-4 h-4 mr-2" />
             App Settings
           </TabsTrigger>
+          <TabsTrigger value="membership">
+            <CreditCard className="w-4 h-4 mr-2" />
+            Membership Plans
+          </TabsTrigger>
           <TabsTrigger value="notifications">
             <Bell className="w-4 h-4 mr-2" />
             Notifications
@@ -271,6 +375,50 @@ export default function SettingsPage() {
 
               <Button onClick={handleSaveAppSettings} disabled={loading}>
                 Save App Settings
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Membership plan fees */}
+        <TabsContent value="membership">
+          <Card>
+            <CardHeader>
+              <CardTitle>Membership Plan Fees</CardTitle>
+              <CardDescription>
+                The society sells exactly two membership plans. Set each fee here; the mobile
+                membership form reads these values and shows the fee for the plan a member selects.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {MEMBERSHIP_PLAN_FIELDS.map(({ name, label, description }) => (
+                <div key={name}>
+                  <Label htmlFor={`fee-${name}`}>{label} fee (₹)</Label>
+                  <Input
+                    id={`fee-${name}`}
+                    type="text"
+                    inputMode="decimal"
+                    value={planFees[name] ?? ''}
+                    onChange={(e) => setPlanFees({ ...planFees, [name]: e.target.value })}
+                    placeholder="e.g. 1000"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">{description}</p>
+                  {!String(planFees[name] ?? '').trim() && (
+                    <p className="text-xs text-amber-600 mt-1">
+                      Not configured. Members cannot select or submit this plan until a fee is set.
+                    </p>
+                  )}
+                </div>
+              ))}
+
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-900">
+                Saving a new fee applies to applications submitted <strong>after</strong> the change.
+                Every existing membership application keeps the fee that was due when it was
+                submitted, so pending and approved payments are never repriced.
+              </div>
+
+              <Button onClick={handleSavePlanFees} disabled={savingFees}>
+                {savingFees ? 'Saving…' : 'Save plan fees'}
               </Button>
             </CardContent>
           </Card>
