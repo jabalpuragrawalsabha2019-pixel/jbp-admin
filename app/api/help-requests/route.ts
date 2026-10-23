@@ -23,10 +23,7 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await admin
       .from('help_requests')
-      .select(`
-        *,
-        reported_user:users!help_requests_reported_user_id_fkey (id, full_name, phone)
-      `)
+      .select('*')
       .eq('reporter_id', user.id)
       .order('created_at', { ascending: false })
 

@@ -29,14 +29,35 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await admin
       .from('event_reviews')
-      .select(`
-        *,
-        user:users!event_reviews_user_id_fkey (id, full_name)
-      `)
+      .select('*')
       .eq('event_id', eventId)
       .order('created_at', { ascending: false })
 
     if (error) return json({ error: error.message }, 500)
+
+    // `event_reviews.user_id` references auth.users, not public.users, so
+    // PostgREST cannot embed the public profile. Resolve reviewer names in a
+    // second query instead of joining on a foreign key that does not exist.
+    const reviewerIds = Array.from(
+      new Set((data ?? []).map((review) => review.user_id).filter(Boolean))
+    )
+    const reviewers = new Map<string, { id: string; full_name: string | null }>()
+
+    if (reviewerIds.length > 0) {
+      const { data: profiles } = await admin
+        .from('users')
+        .select('id, full_name')
+        .in('id', reviewerIds)
+
+      for (const profile of profiles ?? []) {
+        reviewers.set(profile.id, profile)
+      }
+    }
+
+    const reviews = (data ?? []).map((review) => ({
+      ...review,
+      user: reviewers.get(review.user_id) ?? null,
+    }))
 
     // Also get current user's review if they have one
     let userReview = null
@@ -50,7 +71,7 @@ export async function GET(request: NextRequest) {
       userReview = myReview
     }
 
-    return json({ data: data || [], userReview })
+    return json({ data: reviews, userReview })
   } catch (err) {
     return json({ error: err instanceof Error ? err.message : 'Server error' }, 500)
   }
